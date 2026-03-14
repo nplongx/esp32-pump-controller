@@ -1,6 +1,40 @@
 use crate::config::{DeviceConfig, SharedConfig};
 use esp_idf_svc::mqtt::client::{EspMqttClient, EventPayload, MqttClientConfiguration, QoS};
 use log::{error, info, warn};
+use serde::{Deserialize, Serialize};
+use std::sync::{Arc, RwLock};
+
+#[derive(Debug, Deserialize)]
+pub struct IncomingSensorPayload {
+    pub value: f32,
+    pub unit: String,
+    pub timestamp: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SensorData {
+    pub ec_value: f32,
+    pub ph_value: f32,
+    pub temp_value: f32,
+    pub water_level: f32,
+}
+
+impl Default for SensorData {
+    fn default() -> Self {
+        Self {
+            ec_value: 0.0,
+            ph_value: 7.0,
+            temp_value: 25.0,
+            water_level: 20.0,
+        }
+    }
+}
+
+pub type SharedSensorData = Arc<RwLock<SensorData>>;
+
+pub fn create_shared_sensor_data() -> SharedSensorData {
+    Arc::new(RwLock::new(SensorData::default()))
+}
 
 pub fn init_mqtt_client(
     broker_url: &str,
@@ -10,10 +44,10 @@ pub fn init_mqtt_client(
 ) -> anyhow::Result<EspMqttClient<'static>> {
     let client_id = device_id.to_string();
 
-    let topic_config = format!("farm/{}/config", client_id);
-    let topic_sensors = format!("farm/{}/sensors", client_id);
+    let topic_config = format!("AGITECH/{}/config", client_id);
+    let topic_sensors_wildcard = "AGITECH/sensor/+/data".to_string();
+
     let topic_config_cb = topic_config.clone();
-    let topic_sensors_cb = topic_sensors.clone();
 
     let mqtt_config = MqttClientConfiguration {
         client_id: Some(&client_id),
@@ -23,11 +57,11 @@ pub fn init_mqtt_client(
 
     let mut client = EspMqttClient::new_cb(broker_url, &mqtt_config, move |event| {
         match event.payload() {
-            EventPayload::Connected(_sessin) => {
-                info!("Đã kết nối đến MQTT Broker.");
-            }
+            EventPayload::Connected(_) => info!("Đã kết nối đến MQTT Broker."),
             EventPayload::Received { topic, data, .. } => {
-                if topic == Some(&topic_config_cb) {
+                let topic_str = topic.unwrap_or("");
+
+                if topic_str == topic_config_cb {
                     match serde_json::from_slice::<DeviceConfig>(data) {
                         Ok(new_config) => {
                             if let Ok(mut config) = shared_config.write() {
@@ -37,14 +71,17 @@ pub fn init_mqtt_client(
                         }
                         Err(e) => error!("Lỗi parse JSON cấu hình: {}", e),
                     }
-                } else if topic == Some(&topic_sensors_cb) {
-                    match serde_json::from_slice::<SensorData>(data) {
-                        Ok(new_sensors) => {
-                            if let Ok(mut sensors) = shared_sensor_data.write() {
-                                *sensors = new_sensors;
+                } else if topic_str.starts_with("AGITECH/sensor/") && topic_str.ends_with("/data") {
+                    if let Ok(payload) = serde_json::from_slice::<IncomingSensorPayload>(data) {
+                        if let Ok(mut sensors) = shared_sensor_data.write() {
+                            if topic_str.contains("/ec/") {
+                                sensors.ec_value = payload.value;
+                            } else if topic_str.contains("/ph/") {
+                                sensors.ph_value = payload.value;
+                            } else if topic_str.contains("/temp/") {
+                                sensors.temp_value = payload.value;
                             }
                         }
-                        Err(e) => error!("Lỗi parse JSON dữ liệu cảm biến: {}", e),
                     }
                 }
             }
@@ -54,37 +91,11 @@ pub fn init_mqtt_client(
     })?;
 
     client.subscribe(&topic_config, QoS::AtLeastOnce)?;
-    client.subscribe(&topic_sensors, QoS::AtMostOnce)?;
+    client.subscribe(&topic_sensors_wildcard, QoS::AtMostOnce)?;
     info!(
         "Đã subscribe các topics: {}, {}",
-        topic_config, topic_sensors
+        topic_config, topic_sensors_wildcard
     );
 
     Ok(client)
-}
-
-use serde::{Deserialize, Serialize};
-use std::sync::{Arc, RwLock};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SensorData {
-    pub ec_value: f32,
-    pub ph_value: f32,
-    pub temp_value: f32,
-}
-
-impl Default for SensorData {
-    fn default() -> Self {
-        Self {
-            ec_value: 0.0,
-            ph_value: 7.0,
-            temp_value: 25.0,
-        }
-    }
-}
-
-pub type SharedSensorData = Arc<RwLock<SensorData>>;
-
-pub fn create_shared_sensor_data() -> SharedSensorData {
-    Arc::new(RwLock::new(SensorData::default()))
 }
