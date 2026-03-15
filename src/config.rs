@@ -32,9 +32,10 @@ pub struct DeviceConfig {
     pub auto_dilute_enabled: bool, // Bật/tắt tự động xả nước khi EC quá đặc
     pub dilute_drain_amount_cm: f32, // Mỗi lần pha loãng sẽ xả đi bao nhiêu cm nước (VD: 3.0 cm)
 
-    // TÍNH NĂNG MỚI: LỊCH THAY NƯỚC (SCHEDULE)
-    pub scheduled_water_change_enabled: bool, // Bật/tắt lịch xả nước
-    pub water_change_interval_sec: u64,       // Bao lâu thay nước 1 lần (VD: 7 ngày = 604800s)
+    // TÍNH NĂNG MỚI: LỊCH THAY NƯỚC (SCHEDULE - BÁN PHẦN)
+    pub scheduled_water_change_enabled: bool,
+    pub water_change_interval_sec: u64, // Bao lâu thay nước 1 lần (VD: 3 ngày = 259200s)
+    pub scheduled_drain_amount_cm: f32, // Đến hạn thì xả đi bao nhiêu cm? (VD: 5.0 cm)
 
     // --- 3. SAFETY CONFIG (An toàn & Khẩn cấp) ---
     pub emergency_shutdown: bool,
@@ -81,7 +82,8 @@ impl Default for DeviceConfig {
             auto_dilute_enabled: true,
             dilute_drain_amount_cm: 2.0, // Rút đi 2cm nước cũ để châm thêm nước mới
             scheduled_water_change_enabled: false,
-            water_change_interval_sec: 604800, // Mặc định 7 ngày
+            water_change_interval_sec: 259200, // Mặc định 7 ngày
+            scheduled_drain_amount_cm: 5.0,    // cm
 
             emergency_shutdown: false,
             max_ec_limit: 3.5,
@@ -110,4 +112,3 @@ pub type SharedConfig = Arc<RwLock<DeviceConfig>>;
 pub fn create_shared_config() -> SharedConfig {
     Arc::new(RwLock::new(DeviceConfig::default()))
 }
-

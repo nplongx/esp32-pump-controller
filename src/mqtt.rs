@@ -2,7 +2,7 @@ use crate::config::{DeviceConfig, SharedConfig};
 use esp_idf_svc::mqtt::client::{EspMqttClient, EventPayload, MqttClientConfiguration, QoS};
 use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, RwLock};
+use std::sync::{mpsc::Sender, Arc, RwLock};
 
 #[derive(Debug, Deserialize)]
 pub struct IncomingSensorPayload {
@@ -36,18 +36,28 @@ pub fn create_shared_sensor_data() -> SharedSensorData {
     Arc::new(RwLock::new(SensorData::default()))
 }
 
+#[derive(Debug, Deserialize, Clone)]
+pub struct MqttCommandPayload {
+    pub action: String, // "pump_on" hoặc "pump_off"
+    pub pump: String,   // "A", "B", "PH_UP", "PH_DOWN", "CIRCULATION", "WATER_PUMP"
+    pub duration_sec: Option<u64>,
+}
+
 pub fn init_mqtt_client(
     broker_url: &str,
     device_id: &str,
     shared_config: SharedConfig,
     shared_sensor_data: SharedSensorData,
+    cmd_tx: Sender<MqttCommandPayload>,
 ) -> anyhow::Result<EspMqttClient<'static>> {
     let client_id = device_id.to_string();
 
     let topic_config = format!("AGITECH/{}/config", client_id);
+    let topic_command = format!("AGITECH/{}/command", client_id); // <-- THÊM TOPIC COMMAND
     let topic_sensors_wildcard = "AGITECH/sensor/+/data".to_string();
 
     let topic_config_cb = topic_config.clone();
+    let topic_command_cb = topic_command.clone();
 
     let mqtt_config = MqttClientConfiguration {
         client_id: Some(&client_id),
@@ -71,6 +81,17 @@ pub fn init_mqtt_client(
                         }
                         Err(e) => error!("Lỗi parse JSON cấu hình: {}", e),
                     }
+                } else if topic_str == topic_command_cb {
+                    match serde_json::from_slice::<MqttCommandPayload>(data) {
+                        Ok(cmd) => {
+                            info!("📥 Nhận lệnh từ Web/App: {:?}", cmd);
+                            // Bắn lệnh qua channel sang cho FSM thread xử lý
+                            if let Err(e) = cmd_tx.send(cmd) {
+                                error!("Lỗi gửi lệnh sang FSM: {:?}", e);
+                            }
+                        }
+                        Err(e) => error!("Lỗi parse JSON lệnh command: {}", e),
+                    }
                 } else if topic_str.starts_with("AGITECH/sensor/") && topic_str.ends_with("/data") {
                     if let Ok(payload) = serde_json::from_slice::<IncomingSensorPayload>(data) {
                         if let Ok(mut sensors) = shared_sensor_data.write() {
@@ -80,6 +101,8 @@ pub fn init_mqtt_client(
                                 sensors.ph_value = payload.value;
                             } else if topic_str.contains("/temp/") {
                                 sensors.temp_value = payload.value;
+                            } else if topic_str.contains("/water/") {
+                                sensors.water_level = payload.value;
                             }
                         }
                     }
@@ -91,10 +114,12 @@ pub fn init_mqtt_client(
     })?;
 
     client.subscribe(&topic_config, QoS::AtLeastOnce)?;
+    client.subscribe(&topic_command, QoS::AtLeastOnce)?;
     client.subscribe(&topic_sensors_wildcard, QoS::AtMostOnce)?;
+
     info!(
-        "Đã subscribe các topics: {}, {}",
-        topic_config, topic_sensors_wildcard
+        "Đã subscribe các topics: {}, {}, {}",
+        topic_config, topic_command, topic_sensors_wildcard
     );
 
     Ok(client)

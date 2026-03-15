@@ -4,6 +4,7 @@ use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::nvs::EspDefaultNvsPartition;
 use esp_idf_svc::wifi::{AuthMethod, ClientConfiguration, Configuration, EspWifi};
 use log::{error, info};
+use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
@@ -58,11 +59,13 @@ fn main() -> anyhow::Result<()> {
     }
 
     // 4. KHỞI TẠO MQTT CLIENT
+    let (cmd_tx, cmd_rx) = mpsc::channel();
     let _mqtt_client = match mqtt::init_mqtt_client(
         MQTT_URL,
         DEVICE_ID,
         shared_config.clone(),
         shared_sensor_data.clone(),
+        cmd_tx,
     ) {
         Ok(client) => {
             info!("✅ Khởi tạo MQTT Client thành công.");
@@ -110,6 +113,8 @@ fn main() -> anyhow::Result<()> {
         shared_config.clone(),
         shared_sensor_data.clone(),
         pump_controller,
+        nvs.clone(),
+        cmd_rx,
     );
 
     // 7. VÒNG LẶP CHÍNH CỦA THIẾT BỊ
