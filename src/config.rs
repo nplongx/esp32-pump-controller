@@ -29,13 +29,13 @@ pub struct DeviceConfig {
     pub auto_drain_overflow: bool,
 
     // TÍNH NĂNG MỚI: PHA LOÃNG (DILUTION)
-    pub auto_dilute_enabled: bool, // Bật/tắt tự động xả nước khi EC quá đặc
-    pub dilute_drain_amount_cm: f32, // Mỗi lần pha loãng sẽ xả đi bao nhiêu cm nước (VD: 3.0 cm)
+    pub auto_dilute_enabled: bool,
+    pub dilute_drain_amount_cm: f32,
 
     // TÍNH NĂNG MỚI: LỊCH THAY NƯỚC (SCHEDULE - BÁN PHẦN)
     pub scheduled_water_change_enabled: bool,
-    pub water_change_interval_sec: u64, // Bao lâu thay nước 1 lần (VD: 3 ngày = 259200s)
-    pub scheduled_drain_amount_cm: f32, // Đến hạn thì xả đi bao nhiêu cm? (VD: 5.0 cm)
+    pub water_change_interval_sec: u64,
+    pub scheduled_drain_amount_cm: f32,
 
     // --- 3. SAFETY CONFIG (An toàn & Khẩn cấp) ---
     pub emergency_shutdown: bool,
@@ -53,16 +53,20 @@ pub struct DeviceConfig {
     pub ec_gain_per_ml: f32,
     pub ph_shift_up_per_ml: f32,
     pub ph_shift_down_per_ml: f32,
-    pub mixing_delay_sec: u64,
+
+    pub active_mixing_sec: u64,
+    pub sensor_stabilize_sec: u64,
+
     pub ec_step_ratio: f32,
     pub ph_step_ratio: f32,
-    pub pump_capacity_ml_per_sec: f32,
+
+    pub dosing_pump_capacity_ml_per_sec: f32,
 }
 
 impl Default for DeviceConfig {
     fn default() -> Self {
         Self {
-            device_id: String::from("ESP32_PUMP_NODE"),
+            device_id: String::from("device_001"),
             control_mode: ControlMode::Auto,
             is_enabled: true,
 
@@ -78,12 +82,11 @@ impl Default for DeviceConfig {
             auto_refill_enabled: true,
             auto_drain_overflow: true,
 
-            // Cấu hình mới
             auto_dilute_enabled: true,
-            dilute_drain_amount_cm: 2.0, // Rút đi 2cm nước cũ để châm thêm nước mới
+            dilute_drain_amount_cm: 2.0,
             scheduled_water_change_enabled: false,
-            water_change_interval_sec: 259200, // Mặc định 7 ngày
-            scheduled_drain_amount_cm: 5.0,    // cm
+            water_change_interval_sec: 259200,
+            scheduled_drain_amount_cm: 5.0,
 
             emergency_shutdown: false,
             max_ec_limit: 3.5,
@@ -99,10 +102,14 @@ impl Default for DeviceConfig {
             ec_gain_per_ml: 0.015,
             ph_shift_up_per_ml: 0.02,
             ph_shift_down_per_ml: 0.025,
-            mixing_delay_sec: 300,
+
+            active_mixing_sec: 5,
+            sensor_stabilize_sec: 5,
+
             ec_step_ratio: 0.4,
             ph_step_ratio: 0.2,
-            pump_capacity_ml_per_sec: 0.00833,
+
+            dosing_pump_capacity_ml_per_sec: 0.5,
         }
     }
 }
