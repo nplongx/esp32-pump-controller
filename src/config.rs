@@ -40,6 +40,7 @@ pub struct DeviceConfig {
     // --- 3. SAFETY CONFIG (An toàn & Khẩn cấp) ---
     pub emergency_shutdown: bool,
     pub max_ec_limit: f32,
+    pub min_ec_limit: f32,
     pub min_ph_limit: f32,
     pub max_ph_limit: f32,
     pub max_ec_delta: f32,
@@ -90,6 +91,7 @@ impl Default for DeviceConfig {
 
             emergency_shutdown: false,
             max_ec_limit: 3.5,
+            min_ec_limit: 1.0,
             min_ph_limit: 4.0,
             max_ph_limit: 8.5,
             max_ec_delta: 1.0,

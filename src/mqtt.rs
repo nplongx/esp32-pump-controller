@@ -152,7 +152,6 @@ pub fn init_mqtt_client(
                     }
                 }
                 // ---- SENSOR DATA ----
-                // ---- SENSOR DATA ----
                 else if topic_str.starts_with("AGITECH/sensor/") {
                     debug!("📊 Processing SENSOR data");
 
